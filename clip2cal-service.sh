@@ -1,39 +1,37 @@
 #!/bin/bash
-# mail2cal-service.sh — Automatorクイックアクションから呼ばれる版
-# 標準入力またはクリップボードからメール本文を受け取り、予定を抽出して.icsを生成
+# clip2cal-service.sh — クリップボードのテキストから予定を抽出して.icsを生成
+# 標準入力またはクリップボードからテキストを受け取る
 
 set -euo pipefail
 
 export PATH="/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:$HOME/.local/bin:$PATH"
 
-# 標準入力からテキストを読む（Automatorが選択テキストを渡す）
-EMAIL_DATA=$(cat)
+INPUT_TEXT=$(cat)
 
-# 選択テキストが空ならクリップボードにフォールバック
-if [ -z "$EMAIL_DATA" ]; then
-    EMAIL_DATA=$(pbpaste)
+if [ -z "$INPUT_TEXT" ]; then
+    INPUT_TEXT=$(pbpaste)
 fi
 
-if [ -z "$EMAIL_DATA" ]; then
-    osascript -e 'display dialog "メールのテキストが取得できませんでした。\nメール本文を選択してから再実行してください。" buttons {"OK"} default button "OK" with icon caution with title "mail2cal"'
+if [ -z "$INPUT_TEXT" ]; then
+    osascript -e 'display dialog "テキストが取得できませんでした。\n予定を含むテキストをコピーしてから再実行してください。" buttons {"OK"} default button "OK" with icon caution with title "clip2cal"'
     exit 1
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-JSON=$(echo "$EMAIL_DATA" | python3 "$SCRIPT_DIR/mail2cal-extract.py")
+JSON=$(echo "$INPUT_TEXT" | python3 "$SCRIPT_DIR/clip2cal-extract.py")
 
 FOUND=$(echo "$JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('found', False))")
 
-# 予定が見つからなかった場合は仮データで1件作る（メール本文をdescriptionに）
+# 予定が見つからなかった場合は仮データで1件作る（元テキストをdescriptionに）
 if [ "$FOUND" != "True" ]; then
     TODAY=$(date +%Y-%m-%d)
     JSON=$(python3 -c "
 import json, sys
 desc = sys.stdin.read()
 print(json.dumps({'found': True, 'events': [{'title': '予定', 'start_date': '${TODAY}', 'start_time': '09:00', 'end_date': '${TODAY}', 'end_time': '10:00', 'location': '', 'description': desc}]}, ensure_ascii=False))
-" <<< "$EMAIL_DATA")
-    osascript -e 'display notification "予定情報を自動検出できませんでした。手動で入力してください。" with title "mail2cal"'
+" <<< "$INPUT_TEXT")
+    osascript -e 'display notification "予定情報を自動検出できませんでした。手動で入力してください。" with title "clip2cal"'
 fi
 
 # 抽出結果をイベントごとに確認・編集（1画面にまとめる）
@@ -49,7 +47,7 @@ for i, ev in enumerate(data['events'], 1):
 
     prompt_msg = f'予定 [{i}/{len(data[\"events\"])}] を確認・編集してください:'
 
-    script = f'''display dialog \"{prompt_msg}\" default answer \"{default_text}\" buttons {{\"スキップ\", \"登録\"}} default button \"登録\" with title \"mail2cal\"'''
+    script = f'''display dialog \"{prompt_msg}\" default answer \"{default_text}\" buttons {{\"スキップ\", \"登録\"}} default button \"登録\" with title \"clip2cal\"'''
 
     result = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
     if result.returncode != 0:
@@ -101,14 +99,13 @@ if [ "$FOUND" != "True" ]; then
 fi
 JSON="$EDITED_JSON"
 
-# .icsファイルを生成してOutlookで開く
+# .icsファイルを生成してカレンダーアプリで開く
 ICS_DIR=$(mktemp -d)
 
 echo "$JSON" | python3 -c "
 import sys, json, os, subprocess, uuid
 
-script_dir = os.path.dirname(os.path.abspath('$SCRIPT_DIR/mail2cal-config.json'))
-config_path = os.path.join('$SCRIPT_DIR', 'mail2cal-config.json')
+config_path = os.path.join('$SCRIPT_DIR', 'clip2cal-config.json')
 tz = 'Asia/Tokyo'
 if os.path.exists(config_path):
     with open(config_path) as cf:
@@ -130,7 +127,7 @@ for i, ev in enumerate(data['events']):
 
     ics = f'''BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//mail2cal//EN
+PRODID:-//clip2cal//EN
 BEGIN:VEVENT
 UID:{uid}
 DTSTART;TZID={tz}:{sd}T{st}00
@@ -148,4 +145,4 @@ END:VCALENDAR'''
     subprocess.run(['open', path])
 "
 
-osascript -e 'display dialog "カレンダーイベントを開きました。\nOutlookで「保存」を押して登録してください。" buttons {"OK"} default button "OK" with icon note with title "mail2cal"'
+osascript -e 'display dialog "カレンダーイベントを開きました。\nカレンダーアプリで「保存」を押して登録してください。" buttons {"OK"} default button "OK" with icon note with title "clip2cal"'

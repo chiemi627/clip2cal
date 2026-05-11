@@ -1,61 +1,60 @@
-# mail2cal
+# clip2cal
 
-メールの本文から予定（日時・場所）を自動抽出し、Outlookカレンダーに登録するmacOS用ツールです。
+コピーしたテキストから予定（日時・場所）を自動抽出し、カレンダーに登録するmacOS用ツールです。
 
-Azure API / Microsoft Graph API を使わず、ローカルのみで完結します。
+メール、Slack、Teams、Webページなど、どこからコピーしたテキストでも使えます。Azure API / Microsoft Graph API は不要で、ローカルのみで完結します。
 
 ## 特徴
 
 - **API不要・完全ローカル動作** — 正規表現で日時を抽出するため、ネットワーク接続やAPIキーが不要
 - **高速** — LLMを使わないため一瞬で結果が出る
-- **日本語メール対応** — 「来週の水曜」「明後日」「5月14日」「14時〜15時」などの日本語表現を認識
+- **日本語テキスト対応** — 「来週の水曜」「明後日」「5月14日」「14時〜15時」などの日本語表現を認識
 - **大学の時限対応** — 「5限」→ 16:20-17:50 のような変換を設定ファイルでカスタマイズ可能
 - **確認・編集画面付き** — 抽出結果をダイアログで確認・修正してから登録できる
-- **メール本文を詳細に保存** — カレンダーイベントの詳細欄にメール本文がそのまま入る
+- **元テキストを詳細に保存** — カレンダーイベントの詳細欄にコピーしたテキストがそのまま入る
 
 ## 必要な環境
 
 - macOS (AppleScriptを使用)
-- Microsoft Outlook for Mac
+- カレンダーアプリ（Outlook, Apple Calendar など .ics に対応したもの）
 - Python 3 (macOS標準搭載)
 
 ## インストール
 
 ```bash
 # リポジトリをクローン（場所はどこでもOK）
-git clone https://github.com/chiemi627/mail2cal.git
-cd mail2cal
+git clone https://github.com/chiemi627/clip2cal.git
+cd clip2cal
 
 # インストール（設定ファイル作成 + アプリビルド）
 ./install.sh
 ```
 
 `install.sh` が以下を自動で行います：
-- 設定ファイル `mail2cal-config.json` の作成（サンプルからコピー）
-- Spotlightから起動できるアプリ `~/Applications/mail2cal.app` のビルド
+- 設定ファイル `clip2cal-config.json` の作成（サンプルからコピー）
+- Spotlightから起動できるアプリ `~/Applications/clip2cal.app` のビルド
 
-設定ファイルは `mail2cal-config.json` を編集してください（後述）。
+設定ファイルは `clip2cal-config.json` を編集してください（後述）。
 
 ## 使い方
 
 ### アプリ版（推奨）
 
-1. Outlookでメールを開く
-2. `Cmd+A` → `Cmd+C` で本文をコピー
-3. `Cmd+Space` → 「mail2cal」と入力 → `Enter`
-4. 確認ダイアログで内容を編集 →「登録」
-5. Outlookのインポート画面で「保存」
+1. 予定を含むテキストをコピー（`Cmd+C`）
+2. `Cmd+Space` → 「clip2cal」と入力 → `Enter`
+3. 確認ダイアログで内容を編集 →「登録」
+4. カレンダーアプリのインポート画面で「保存」
 
 ### ターミナル版
 
 ```bash
-# メール本文をコピーした状態で
-./mail2cal.sh
+# テキストをコピーした状態で
+./clip2cal.sh
 ```
 
 ## 設定
 
-`mail2cal-config.json` で以下をカスタマイズできます。
+`clip2cal-config.json` で以下をカスタマイズできます。
 
 ### 時限（periods）
 
@@ -93,7 +92,7 @@ cd mail2cal
 
 ### デフォルト時刻（default_start_time / default_end_time）
 
-メールから時刻を抽出できなかった場合に使用される初期値です。
+テキストから時刻を抽出できなかった場合に使用される初期値です。
 
 ```json
 {
@@ -104,7 +103,7 @@ cd mail2cal
 
 ### 場所キーワード（location_keywords）
 
-メール本文からこれらのキーワードを含む語句を「場所」として抽出します。
+テキストからこれらのキーワードを含む語句を「場所」として抽出します。
 
 ```json
 {
@@ -135,23 +134,23 @@ cd mail2cal
 
 ```
 install.sh                    # インストールスクリプト
-mail2cal-app.applescript      # macOSアプリのソーステンプレート
-mail2cal-service.sh           # 処理の制御（ダイアログ表示・.ics生成）
-mail2cal-extract.py           # 正規表現による日時抽出エンジン
-mail2cal.sh                   # ターミナル版
-mail2cal-config.json          # 設定ファイル（install.shで作成）
-mail2cal-config.json.example  # 設定ファイルのサンプル
+clip2cal-app.applescript      # macOSアプリのソーステンプレート
+clip2cal-service.sh           # 処理の制御（ダイアログ表示・.ics生成）
+clip2cal-extract.py           # 正規表現による日時抽出エンジン
+clip2cal.sh                   # ターミナル版
+clip2cal-config.json          # 設定ファイル（install.shで作成）
+clip2cal-config.json.example  # 設定ファイルのサンプル
 ```
 
 ## 仕組み
 
 ```
-クリップボード → mail2cal-extract.py（正規表現で日時抽出）
+クリップボード → clip2cal-extract.py（正規表現で日時抽出）
     → 確認ダイアログ（編集可能）
-    → .icsファイル生成 → Outlookで開く → カレンダーに保存
+    → .icsファイル生成 → カレンダーアプリで開く → 保存
 ```
 
-新しいOutlook for MacはAppleScriptによるカレンダー操作をサポートしていないため、.ics（iCalendar）ファイルを経由してイベントを登録します。
+.ics（iCalendar）は世界標準のカレンダーフォーマットで、Outlook・Google Calendar・Apple Calendar など主要なカレンダーアプリで利用できます。
 
 ## ライセンス
 

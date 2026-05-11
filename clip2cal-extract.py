@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""メール本文から予定情報を正規表現で抽出する"""
+"""テキストから予定情報を正規表現で抽出する"""
 
 import re
 import json
@@ -15,7 +15,7 @@ WEEKDAY_MAP = {
 
 def load_config():
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    config_path = os.path.join(script_dir, "mail2cal-config.json")
+    config_path = os.path.join(script_dir, "clip2cal-config.json")
     defaults = {
         "timezone": "Asia/Tokyo",
         "periods": {},

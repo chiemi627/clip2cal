@@ -1,20 +1,20 @@
 #!/bin/bash
-# mail2cal.sh — メール本文から予定を抽出してOutlookカレンダーに登録する
-# 使い方: メールの本文をコピー(Cmd+C)してから実行
+# clip2cal.sh — クリップボードのテキストから予定を抽出してカレンダーに登録する（ターミナル版）
+# 使い方: 予定を含むテキストをコピー(Cmd+C)してから実行
 
 set -euo pipefail
 
-# 1. クリップボードからメール本文を取得
-EMAIL_DATA=$(pbpaste)
+# 1. クリップボードからテキストを取得
+INPUT_TEXT=$(pbpaste)
 
-if [ -z "$EMAIL_DATA" ]; then
+if [ -z "$INPUT_TEXT" ]; then
     echo "エラー: クリップボードが空です。"
-    echo "Outlookでメールを開き、本文を Cmd+A → Cmd+C でコピーしてから再実行してください。"
+    echo "予定を含むテキストをコピーしてから再実行してください。"
     exit 1
 fi
 
 echo "=== クリップボードの内容（先頭5行） ==="
-echo "$EMAIL_DATA" | head -5
+echo "$INPUT_TEXT" | head -5
 echo "..."
 echo ""
 
@@ -22,18 +22,16 @@ echo ""
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "予定を抽出中..."
-JSON=$(echo "$EMAIL_DATA" | python3 "$SCRIPT_DIR/mail2cal-extract.py")
+JSON=$(echo "$INPUT_TEXT" | python3 "$SCRIPT_DIR/clip2cal-extract.py")
 
 FOUND=$(echo "$JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('found', False))")
 
 if [ "$FOUND" != "True" ]; then
-    echo "このメールには予定情報が見つかりませんでした。"
+    echo "予定情報が見つかりませんでした。"
     exit 0
 fi
 
 # 3. 抽出した予定を表示して確認
-EVENT_COUNT=$(echo "$JSON" | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('events',[])))")
-
 echo ""
 echo "=== 抽出された予定 ==="
 echo "$JSON" | python3 -c "
@@ -44,8 +42,6 @@ for i, ev in enumerate(data['events'], 1):
     print(f\"      日時: {ev['start_date']} {ev['start_time']} 〜 {ev['end_date']} {ev['end_time']}\")
     if ev.get('location'):
         print(f\"      場所: {ev['location']}\")
-    if ev.get('description'):
-        print(f\"      備考: {ev['description']}\")
     print()
 "
 
@@ -56,12 +52,17 @@ if [ "$CONFIRM" != "y" ] && [ "$CONFIRM" != "Y" ]; then
     exit 0
 fi
 
-# 4. .icsファイルを生成してOutlookで開く
+# 4. .icsファイルを生成してカレンダーアプリで開く
 ICS_DIR=$(mktemp -d)
 
 echo "$JSON" | python3 -c "
 import sys, json, os, subprocess, uuid
-from datetime import datetime
+
+config_path = os.path.join('$SCRIPT_DIR', 'clip2cal-config.json')
+tz = 'Asia/Tokyo'
+if os.path.exists(config_path):
+    with open(config_path) as cf:
+        tz = json.load(cf).get('timezone', tz)
 
 data = json.load(sys.stdin)
 ics_dir = '$ICS_DIR'
@@ -79,11 +80,11 @@ for i, ev in enumerate(data['events']):
 
     ics = f'''BEGIN:VCALENDAR
 VERSION:2.0
-PRODID:-//mail2cal//EN
+PRODID:-//clip2cal//EN
 BEGIN:VEVENT
 UID:{uid}
-DTSTART;TZID=Asia/Tokyo:{sd}T{st}00
-DTEND;TZID=Asia/Tokyo:{ed}T{et}00
+DTSTART;TZID={tz}:{sd}T{st}00
+DTEND;TZID={tz}:{ed}T{et}00
 SUMMARY:{title}
 LOCATION:{location}
 DESCRIPTION:{description}
@@ -95,9 +96,9 @@ END:VCALENDAR'''
         f.write(ics)
 
     subprocess.run(['open', path])
-    print(f'  → Outlookでインポートダイアログを開きました: {ev[\"title\"]}')
+    print(f'  → カレンダーアプリでインポートダイアログを開きました: {ev[\"title\"]}')
 "
 
 echo ""
-echo ".icsファイルがOutlookで開かれます。「保存」を押してカレンダーに登録してください。"
+echo ".icsファイルが開かれます。カレンダーアプリで「保存」を押して登録してください。"
 echo "一時ファイル: $ICS_DIR"
