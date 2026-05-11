@@ -72,22 +72,29 @@ ics_dir = '$ICS_DIR'
 
 for i, ev in enumerate(data['events']):
     sd = ev['start_date'].replace('-', '')
-    st = ev['start_time'].replace(':', '')
     ed = ev['end_date'].replace('-', '')
-    et = ev['end_time'].replace(':', '')
     uid = str(uuid.uuid4())
 
     title = ev['title'].replace(',', '\\\\,').replace(';', '\\\\;')
     location = ev.get('location', '').replace(',', '\\\\,').replace(';', '\\\\;')
     description = ev.get('description', '').replace(',', '\\\\,').replace(';', '\\\\;').replace(chr(10), '\\\\n')
 
+    if ev.get('all_day'):
+        from datetime import datetime, timedelta
+        next_day = datetime.strptime(ed, '%Y%m%d') + timedelta(days=1)
+        ed_next = next_day.strftime('%Y%m%d')
+        dt_lines = f'DTSTART;VALUE=DATE:{sd}\nDTEND;VALUE=DATE:{ed_next}'
+    else:
+        st = ev['start_time'].replace(':', '')
+        et = ev['end_time'].replace(':', '')
+        dt_lines = f'DTSTART;TZID={tz}:{sd}T{st}00\nDTEND;TZID={tz}:{ed}T{et}00'
+
     ics = f'''BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//clip2cal//EN
 BEGIN:VEVENT
 UID:{uid}
-DTSTART;TZID={tz}:{sd}T{st}00
-DTEND;TZID={tz}:{ed}T{et}00
+{dt_lines}
 SUMMARY:{title}
 LOCATION:{location}
 DESCRIPTION:{description}

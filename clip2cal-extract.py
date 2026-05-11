@@ -214,6 +214,13 @@ def parse_title(text):
     return "予定"
 
 
+def is_deadline(text, date_start, date_end):
+    before = text[max(0, date_start - 10):date_start]
+    after = text[date_end:date_end + 10]
+    deadline_words = r'まで|締切|〆切|期限|必着|厳守'
+    return bool(re.search(deadline_words, before + after))
+
+
 def extract_events(text):
     dates = parse_date(text)
     times = parse_time(text)
@@ -230,6 +237,18 @@ def extract_events(text):
     if dates and times:
         used_times = set()
         for dt, dstart, dend in dates:
+            if is_deadline(text, dstart, dend):
+                events.append({
+                    "title": f"【締切】{title}",
+                    "start_date": dt.strftime("%Y-%m-%d"),
+                    "start_time": "",
+                    "end_date": dt.strftime("%Y-%m-%d"),
+                    "end_time": "",
+                    "location": location,
+                    "description": text,
+                    "all_day": True,
+                })
+                continue
             best_time = None
             best_dist = float('inf')
             for i, (tstart, tend, tpos_s, tpos_e, ttype) in enumerate(times):
@@ -261,15 +280,17 @@ def extract_events(text):
                     "description": text,
                 })
     elif dates:
-        for dt, _, _ in dates:
+        for dt, dstart, dend in dates:
+            deadline = is_deadline(text, dstart, dend)
             events.append({
-                "title": title,
+                "title": f"【締切】{title}" if deadline else title,
                 "start_date": dt.strftime("%Y-%m-%d"),
-                "start_time": default_start,
+                "start_time": "" if deadline else default_start,
                 "end_date": dt.strftime("%Y-%m-%d"),
-                "end_time": default_end,
+                "end_time": "" if deadline else default_end,
                 "location": location,
                 "description": text,
+                "all_day": deadline,
             })
     elif times:
         for tstart, tend, _, _, _ in times:

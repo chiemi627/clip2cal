@@ -43,7 +43,10 @@ edited_events = []
 
 for i, ev in enumerate(data['events'], 1):
     loc = ev.get('location', '')
-    default_text = f'イベント名: {ev[\"title\"]}\n開始: {ev[\"start_date\"]} {ev[\"start_time\"]}\n終了: {ev[\"end_date\"]} {ev[\"end_time\"]}\n場所: {loc}'
+    if ev.get('all_day'):
+        default_text = f'イベント名: {ev[\"title\"]}\n日付: {ev[\"start_date\"]}\n終日: はい\n場所: {loc}'
+    else:
+        default_text = f'イベント名: {ev[\"title\"]}\n開始: {ev[\"start_date\"]} {ev[\"start_time\"]}\n終了: {ev[\"end_date\"]} {ev[\"end_time\"]}\n場所: {loc}'
 
     prompt_msg = f'予定 [{i}/{len(data[\"events\"])}] を確認・編集してください:'
 
@@ -73,18 +76,30 @@ for i, ev in enumerate(data['events'], 1):
     ev['title'] = fields.get('イベント名', ev['title'])
     ev['location'] = fields.get('場所', ev.get('location', ''))
 
-    start = fields.get('開始', f'{ev[\"start_date\"]} {ev[\"start_time\"]}')
-    end = fields.get('終了', f'{ev[\"end_date\"]} {ev[\"end_time\"]}')
+    all_day_val = fields.get('終日', '')
+    if all_day_val in ('はい', 'yes', 'Yes'):
+        ev['all_day'] = True
+        date_val = fields.get('日付', ev['start_date'])
+        dm = re.match(r'(\d{4}-\d{2}-\d{2})', date_val)
+        if dm:
+            ev['start_date'] = dm.group(1)
+            ev['end_date'] = dm.group(1)
+        ev['start_time'] = ''
+        ev['end_time'] = ''
+    else:
+        ev['all_day'] = False
+        start = fields.get('開始', f'{ev[\"start_date\"]} {ev[\"start_time\"]}')
+        end = fields.get('終了', f'{ev[\"end_date\"]} {ev[\"end_time\"]}')
 
-    # 日時パース (YYYY-MM-DD HH:MM)
-    sm = re.match(r'(\d{4}-\d{2}-\d{2})\s+(\d{1,2}:\d{2})', start)
-    if sm:
-        ev['start_date'] = sm.group(1)
-        ev['start_time'] = sm.group(2)
-    em = re.match(r'(\d{4}-\d{2}-\d{2})\s+(\d{1,2}:\d{2})', end)
-    if em:
-        ev['end_date'] = em.group(1)
-        ev['end_time'] = em.group(2)
+        # 日時パース (YYYY-MM-DD HH:MM)
+        sm = re.match(r'(\d{4}-\d{2}-\d{2})\s+(\d{1,2}:\d{2})', start)
+        if sm:
+            ev['start_date'] = sm.group(1)
+            ev['start_time'] = sm.group(2)
+        em = re.match(r'(\d{4}-\d{2}-\d{2})\s+(\d{1,2}:\d{2})', end)
+        if em:
+            ev['end_date'] = em.group(1)
+            ev['end_time'] = em.group(2)
 
     edited_events.append(ev)
 
@@ -119,22 +134,29 @@ ics_dir = '$ICS_DIR'
 
 for i, ev in enumerate(data['events']):
     sd = ev['start_date'].replace('-', '')
-    st = ev['start_time'].replace(':', '')
     ed = ev['end_date'].replace('-', '')
-    et = ev['end_time'].replace(':', '')
     uid = str(uuid.uuid4())
 
     title = ev['title'].replace(',', '\\\\,').replace(';', '\\\\;')
     location = ev.get('location', '').replace(',', '\\\\,').replace(';', '\\\\;')
     description = ev.get('description', '').replace(',', '\\\\,').replace(';', '\\\\;').replace(chr(10), '\\\\n')
 
+    if ev.get('all_day'):
+        from datetime import datetime, timedelta
+        next_day = datetime.strptime(ed, '%Y%m%d') + timedelta(days=1)
+        ed_next = next_day.strftime('%Y%m%d')
+        dt_lines = f'DTSTART;VALUE=DATE:{sd}\nDTEND;VALUE=DATE:{ed_next}'
+    else:
+        st = ev['start_time'].replace(':', '')
+        et = ev['end_time'].replace(':', '')
+        dt_lines = f'DTSTART;TZID={tz}:{sd}T{st}00\nDTEND;TZID={tz}:{ed}T{et}00'
+
     ics = f'''BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//clip2cal//EN
 BEGIN:VEVENT
 UID:{uid}
-DTSTART;TZID={tz}:{sd}T{st}00
-DTEND;TZID={tz}:{ed}T{et}00
+{dt_lines}
 SUMMARY:{title}
 LOCATION:{location}
 DESCRIPTION:{description}
