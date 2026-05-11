@@ -137,6 +137,15 @@ def parse_time(text):
         end = f"{int(m.group(2)):02d}:00"
         times.append((start, end, m.start(), m.end(), "range"))
 
+    for m in re.finditer(r'(?<!\d)(\d{1,2}):(\d{2})\s*[〜~\-ー](?!\s*\d)', text):
+        pos = m.start()
+        if any(t[2] <= pos < t[3] for t in times):
+            continue
+        h = int(m.group(1))
+        start = f"{h:02d}:{m.group(2)}"
+        end = f"{h+1:02d}:{m.group(2)}"
+        times.append((start, end, m.start(), m.end(), "open_range"))
+
     for m in re.finditer(r'(?<!\d)(\d{1,2}):(\d{2})(?!\s*[〜~\-ー])', text):
         pos = m.start()
         if any(t[2] <= pos < t[3] for t in times):
@@ -145,6 +154,15 @@ def parse_time(text):
         h = int(m.group(1))
         end = f"{h+1:02d}:{m.group(2)}"
         times.append((start, end, m.start(), m.end(), "single"))
+
+    for m in re.finditer(r'(?<!\d)(\d{1,2})時\s*[〜~\-ー](?!\s*\d)', text):
+        pos = m.start()
+        if any(t[2] <= pos < t[3] for t in times):
+            continue
+        h = int(m.group(1))
+        start = f"{h:02d}:00"
+        end = f"{h+1:02d}:00"
+        times.append((start, end, m.start(), m.end(), "open_range"))
 
     for m in re.finditer(r'(?<!\d)(\d{1,2})時(?!\d)(?!\s*[〜~\-ー])', text):
         pos = m.start()
