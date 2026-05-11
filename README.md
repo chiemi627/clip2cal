@@ -4,6 +4,8 @@
 
 メール、Slack、Teams、Webページなど、どこからコピーしたテキストでも使えます。Azure API / Microsoft Graph API は不要で、ローカルのみで完結します。
 
+iPhone / iPad 版は [clip2cal-ios](https://github.com/chiemi627/clip2cal-ios) を参照してください。
+
 ## 特徴
 
 - **API不要・完全ローカル動作** — 正規表現で日時を抽出するため、ネットワーク接続やAPIキーが不要
