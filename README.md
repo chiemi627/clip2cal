@@ -1,0 +1,158 @@
+# mail2cal
+
+メールの本文から予定（日時・場所）を自動抽出し、Outlookカレンダーに登録するmacOS用ツールです。
+
+Azure API / Microsoft Graph API を使わず、ローカルのみで完結します。
+
+## 特徴
+
+- **API不要・完全ローカル動作** — 正規表現で日時を抽出するため、ネットワーク接続やAPIキーが不要
+- **高速** — LLMを使わないため一瞬で結果が出る
+- **日本語メール対応** — 「来週の水曜」「明後日」「5月14日」「14時〜15時」などの日本語表現を認識
+- **大学の時限対応** — 「5限」→ 16:20-17:50 のような変換を設定ファイルでカスタマイズ可能
+- **確認・編集画面付き** — 抽出結果をダイアログで確認・修正してから登録できる
+- **メール本文を詳細に保存** — カレンダーイベントの詳細欄にメール本文がそのまま入る
+
+## 必要な環境
+
+- macOS (AppleScriptを使用)
+- Microsoft Outlook for Mac
+- Python 3 (macOS標準搭載)
+
+## インストール
+
+```bash
+# リポジトリをクローン
+git clone https://github.com/chiemi627/mail2cal.git
+cd mail2cal
+
+# 設定ファイルをコピー（必要に応じて編集）
+cp mail2cal-config.json.example mail2cal-config.json
+
+# スクリプトに実行権限を付与
+chmod +x mail2cal-service.sh mail2cal.sh mail2cal-extract.py
+
+# macOSアプリをビルド（Spotlightから起動したい場合）
+mkdir -p ~/Applications
+osacompile -o ~/Applications/mail2cal.app mail2cal-app.applescript
+```
+
+## 使い方
+
+### アプリ版（推奨）
+
+1. Outlookでメールを開く
+2. `Cmd+A` → `Cmd+C` で本文をコピー
+3. `Cmd+Space` → 「mail2cal」と入力 → `Enter`
+4. 確認ダイアログで内容を編集 →「登録」
+5. Outlookのインポート画面で「保存」
+
+### ターミナル版
+
+```bash
+# メール本文をコピーした状態で
+./mail2cal.sh
+```
+
+## 設定
+
+`mail2cal-config.json` で以下をカスタマイズできます。
+
+### 時限（periods）
+
+大学などの時限表を設定します。各エントリは `"時限番号": ["開始時刻", "終了時刻"]` の形式です。
+
+```json
+{
+  "periods": {
+    "1": ["08:50", "10:20"],
+    "2": ["10:30", "12:00"],
+    "3": ["13:00", "14:30"],
+    "4": ["14:40", "16:10"],
+    "5": ["16:20", "17:50"]
+  }
+}
+```
+
+時限機能を使わない場合は空にしてください。
+
+```json
+{
+  "periods": {}
+}
+```
+
+### タイムゾーン（timezone）
+
+.icsファイルに設定されるタイムゾーンです。
+
+```json
+{
+  "timezone": "Asia/Tokyo"
+}
+```
+
+### デフォルト時刻（default_start_time / default_end_time）
+
+メールから時刻を抽出できなかった場合に使用される初期値です。
+
+```json
+{
+  "default_start_time": "09:00",
+  "default_end_time": "10:00"
+}
+```
+
+### 場所キーワード（location_keywords）
+
+メール本文からこれらのキーワードを含む語句を「場所」として抽出します。
+
+```json
+{
+  "location_keywords": ["号室", "号館", "会議室", "教室", "ホール"]
+}
+```
+
+## 認識できる日時パターン
+
+### 日付
+
+| パターン | 例 |
+|---|---|
+| 年月日 | `2026年5月14日`, `2026/5/14` |
+| 月日 | `5月14日`, `5/14` |
+| 相対曜日 | `来週の水曜`, `今週の金曜`, `再来週の月曜` |
+| 相対日 | `今日`, `明日`, `明後日` |
+
+### 時刻
+
+| パターン | 例 |
+|---|---|
+| 時限 | `5限`, `3限〜5限` |
+| 時刻範囲 | `14:00〜15:30`, `14時〜15時30分` |
+| 単独時刻 | `10:00`, `14時`（終了は1時間後） |
+
+## ファイル構成
+
+```
+mail2cal-app.applescript   # macOSアプリのソース
+mail2cal-service.sh        # 処理の制御（ダイアログ表示・.ics生成）
+mail2cal-extract.py        # 正規表現による日時抽出エンジン
+mail2cal.sh                # ターミナル版
+mail2cal-config.json       # 設定ファイル（各自作成）
+mail2cal-config.json.example  # 設定ファイルのサンプル
+```
+
+## 仕組み
+
+```
+クリップボード → mail2cal-extract.py（正規表現で日時抽出）
+    → 確認ダイアログ（編集可能）
+    → .icsファイル生成 → Outlookで開く → カレンダーに保存
+```
+
+新しいOutlook for MacはAppleScriptによるカレンダー操作をサポートしていないため、.ics（iCalendar）ファイルを経由してイベントを登録します。
+
+## ライセンス
+
+MIT
