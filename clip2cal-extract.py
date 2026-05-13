@@ -195,6 +195,24 @@ def parse_location(text):
 def clean_title(s):
     s = re.sub(r'<[@#!&:][^>]*>', '', s)
     s = re.sub(r'[\x00-\x1f\x7f]', '', s)
+    # 日付・時刻パターンを除去
+    s = re.sub(r'\d{4}[年/\-]\d{1,2}[月/\-]\d{1,2}日?', '', s)
+    s = re.sub(r'\d{1,2}月\d{1,2}日', '', s)
+    s = re.sub(r'(?<![:\d])\d{1,2}/\d{1,2}(?![:/\d])', '', s)
+    s = re.sub(r'[（(][月火水木金土日][）)]', '', s)
+    s = re.sub(r'\d{1,2}:\d{2}\s*[〜~\-ー]\s*\d{1,2}:\d{2}', '', s)
+    s = re.sub(r'\d{1,2}:\d{2}\s*[〜~\-ー]?', '', s)
+    s = re.sub(r'\d{1,2}時\d{1,2}分?\s*[〜~\-ー]\s*\d{1,2}時\d{1,2}分?', '', s)
+    s = re.sub(r'\d{1,2}時\s*[〜~\-ー]?\s*', '', s)
+    s = re.sub(r'\d限[〜~\-ー]\d限', '', s)
+    s = re.sub(r'\d限', '', s)
+    s = re.sub(r'(今週|来週|再来週)の?[月火水木金土日]曜?日?', '', s)
+    s = re.sub(r'(今日|本日|明日|明後日)', '', s)
+    s = re.sub(r'R\d+年度', '', s)
+    s = re.sub(r'\d{4}年度', '', s)
+    # 残ったゴミを掃除
+    s = re.sub(r'^[\s、。,.\-/：:の]+', '', s)
+    s = re.sub(r'[\s、。,.\-/：:の]+$', '', s)
     return s.strip()
 
 def parse_title(text):
