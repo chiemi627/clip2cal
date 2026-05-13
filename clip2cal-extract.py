@@ -87,6 +87,28 @@ def parse_date(text):
             except ValueError:
                 pass
 
+    # N日 単独（月なし）→ 今月 or 来月と推定
+    for m in re.finditer(r'(?<!\d)(?<![月/\-])(\d{1,2})日(?:[月火水木金土日]曜日?)?(?![\d月])', text):
+        if overlaps(m.start(), m.end()):
+            continue
+        d = int(m.group(1))
+        if 1 <= d <= 31:
+            try:
+                dt = datetime(TODAY.year, TODAY.month, d)
+                if dt.date() < TODAY.date() - timedelta(days=7):
+                    # 来月と推定
+                    mo = TODAY.month + 1
+                    yr = TODAY.year
+                    if mo > 12:
+                        mo = 1
+                        yr += 1
+                    dt = datetime(yr, mo, d)
+                dates.append((dt, m.start(), m.end()))
+                used_ranges.append((m.start(), m.end()))
+                has_explicit = True
+            except ValueError:
+                pass
+
     for m in re.finditer(r'(今週|来週|再来週)の?([月火水木金土日])曜?日?', text):
         week_offset = {"今週": 0, "来週": 1, "再来週": 2}[m.group(1)]
         target_wd = WEEKDAY_MAP[m.group(2)]
@@ -222,6 +244,8 @@ def clean_title(s):
     s = re.sub(r'\d{1,2}月\d{1,2}日', '', s)
     s = re.sub(r'(?<![:\d])\d{1,2}/\d{1,2}(?![:/\d])', '', s)
     s = re.sub(r'[（(][月火水木金土日][）)]', '', s)
+    s = re.sub(r'\d{1,2}日[月火水木金土日]曜日?', '', s)
+    s = re.sub(r'(?<!\d月)\d{1,2}日', '', s)
     s = re.sub(r'\d{1,2}:\d{2}\s*[〜~\-ー]\s*\d{1,2}:\d{2}', '', s)
     s = re.sub(r'\d{1,2}:\d{2}\s*[〜~\-ー]?', '', s)
     s = re.sub(r'\d{1,2}時\d{1,2}分?\s*[〜~\-ー]\s*\d{1,2}時\d{1,2}分?', '', s)
