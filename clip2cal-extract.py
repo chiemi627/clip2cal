@@ -9,6 +9,11 @@ from datetime import datetime, timedelta
 
 TODAY = datetime.now()
 
+def normalize_text(text):
+    """全角数字・コロンを半角に変換"""
+    table = str.maketrans('０１２３４５６７８９：', '0123456789:')
+    return text.translate(table)
+
 WEEKDAY_MAP = {
     "月": 0, "火": 1, "水": 2, "木": 3, "金": 4, "土": 5, "日": 6,
 }
@@ -105,90 +110,89 @@ def parse_time(text):
     times = []
     period_table = CONFIG["period_table"]
 
+    def used(pos):
+        return any(t[2] <= pos < t[3] for t in times)
+
+    # 時限（範囲）
     if period_table:
         for m in re.finditer(r'(\d)限[〜~\-ー](\d)限', text):
             p1, p2 = m.group(1), m.group(2)
             if p1 in period_table and p2 in period_table:
-                start = period_table[p1][0]
-                end = period_table[p2][1]
-                times.append((start, end, m.start(), m.end(), "period_range"))
+                times.append((period_table[p1][0], period_table[p2][1], m.start(), m.end(), "period_range"))
 
         for m in re.finditer(r'(\d)[限]', text):
-            pos = m.start()
-            if any(t[2] <= pos < t[3] for t in times):
-                continue
+            if used(m.start()): continue
             p = m.group(1)
             if p in period_table:
-                start, end = period_table[p]
-                times.append((start, end, m.start(), m.end(), "period"))
+                times.append((period_table[p][0], period_table[p][1], m.start(), m.end(), "period"))
 
+    # 時刻範囲 (HH:MM〜HH:MM)
     for m in re.finditer(r'(\d{1,2}):(\d{2})\s*[〜~\-ー]\s*(\d{1,2}):(\d{2})', text):
-        start = f"{int(m.group(1)):02d}:{m.group(2)}"
-        end = f"{int(m.group(3)):02d}:{m.group(4)}"
-        times.append((start, end, m.start(), m.end(), "range"))
+        times.append((f"{int(m.group(1)):02d}:{m.group(2)}", f"{int(m.group(3)):02d}:{m.group(4)}", m.start(), m.end(), "range"))
 
+    # 時刻範囲 (H時M分〜H時M分)
     for m in re.finditer(r'(\d{1,2})時(\d{1,2})分?\s*[〜~\-ー]\s*(\d{1,2})時(\d{1,2})分?', text):
-        start = f"{int(m.group(1)):02d}:{int(m.group(2)):02d}"
-        end = f"{int(m.group(3)):02d}:{int(m.group(4)):02d}"
-        times.append((start, end, m.start(), m.end(), "range"))
+        times.append((f"{int(m.group(1)):02d}:{int(m.group(2)):02d}", f"{int(m.group(3)):02d}:{int(m.group(4)):02d}", m.start(), m.end(), "range"))
 
+    # 時刻範囲 (H時〜H時)
     for m in re.finditer(r'(\d{1,2})時\s*[〜~\-ー]\s*(\d{1,2})時', text):
-        start = f"{int(m.group(1)):02d}:00"
-        end = f"{int(m.group(2)):02d}:00"
-        times.append((start, end, m.start(), m.end(), "range"))
+        times.append((f"{int(m.group(1)):02d}:00", f"{int(m.group(2)):02d}:00", m.start(), m.end(), "range"))
 
+    # 午前/午後＋時刻（午後2時、午前10:30 など）— 単独時刻より先にマッチ
+    for m in re.finditer(r'(午前|午後)(\d{1,2})時(\d{1,2})分?', text):
+        if used(m.start()): continue
+        h, mi = int(m.group(2)), int(m.group(3))
+        if m.group(1) == "午後" and h < 12: h += 12
+        times.append((f"{h:02d}:{mi:02d}", f"{h+1:02d}:{mi:02d}", m.start(), m.end(), "ampm_time"))
+
+    for m in re.finditer(r'(午前|午後)(\d{1,2})時(?!\d)', text):
+        if used(m.start()): continue
+        h = int(m.group(2))
+        if m.group(1) == "午後" and h < 12: h += 12
+        times.append((f"{h:02d}:00", f"{h+1:02d}:00", m.start(), m.end(), "ampm_time"))
+
+    for m in re.finditer(r'(午前|午後)(\d{1,2}):(\d{2})', text):
+        if used(m.start()): continue
+        h = int(m.group(2))
+        if m.group(1) == "午後" and h < 12: h += 12
+        times.append((f"{h:02d}:{m.group(3)}", f"{h+1:02d}:{m.group(3)}", m.start(), m.end(), "ampm_time"))
+
+    # 開放時刻範囲 (HH:MM- で終了時刻なし)
     for m in re.finditer(r'(?<!\d)(\d{1,2}):(\d{2})\s*[〜~\-ー](?!\s*\d)', text):
-        pos = m.start()
-        if any(t[2] <= pos < t[3] for t in times):
-            continue
+        if used(m.start()): continue
         h = int(m.group(1))
-        start = f"{h:02d}:{m.group(2)}"
-        end = f"{h+1:02d}:{m.group(2)}"
-        times.append((start, end, m.start(), m.end(), "open_range"))
+        times.append((f"{h:02d}:{m.group(2)}", f"{h+1:02d}:{m.group(2)}", m.start(), m.end(), "open_range"))
 
+    # 単独時刻 (HH:MM)
     for m in re.finditer(r'(?<!\d)(\d{1,2}):(\d{2})(?!\s*[〜~\-ー])', text):
-        pos = m.start()
-        if any(t[2] <= pos < t[3] for t in times):
-            continue
-        start = f"{int(m.group(1)):02d}:{m.group(2)}"
+        if used(m.start()): continue
         h = int(m.group(1))
-        end = f"{h+1:02d}:{m.group(2)}"
-        times.append((start, end, m.start(), m.end(), "single"))
+        times.append((f"{h:02d}:{m.group(2)}", f"{h+1:02d}:{m.group(2)}", m.start(), m.end(), "single"))
 
+    # 開放時刻範囲 (H時〜 で終了時刻なし)
     for m in re.finditer(r'(?<!\d)(\d{1,2})時\s*[〜~\-ー](?!\s*\d)', text):
-        pos = m.start()
-        if any(t[2] <= pos < t[3] for t in times):
-            continue
+        if used(m.start()): continue
         h = int(m.group(1))
-        start = f"{h:02d}:00"
-        end = f"{h+1:02d}:00"
-        times.append((start, end, m.start(), m.end(), "open_range"))
+        times.append((f"{h:02d}:00", f"{h+1:02d}:00", m.start(), m.end(), "open_range"))
 
+    # 単独時刻 (H時)
     for m in re.finditer(r'(?<!\d)(\d{1,2})時(?!\d)(?!\s*[〜~\-ー])', text):
-        pos = m.start()
-        if any(t[2] <= pos < t[3] for t in times):
-            continue
+        if used(m.start()): continue
         h = int(m.group(1))
-        start = f"{h:02d}:00"
-        end = f"{h+1:02d}:00"
-        times.append((start, end, m.start(), m.end(), "single"))
+        times.append((f"{h:02d}:00", f"{h+1:02d}:00", m.start(), m.end(), "single"))
 
+    # 午前/午後 単独（時刻なし）
     for m in re.finditer(r'午前', text):
-        pos = m.start()
-        if any(t[2] <= pos < t[3] for t in times):
-            continue
+        if used(m.start()): continue
         times.append(("09:00", "12:00", m.start(), m.end(), "ampm"))
 
     for m in re.finditer(r'午後', text):
-        pos = m.start()
-        if any(t[2] <= pos < t[3] for t in times):
-            continue
+        if used(m.start()): continue
         times.append(("13:00", "18:00", m.start(), m.end(), "ampm"))
 
+    # 終日
     for m in re.finditer(r'終日', text):
-        pos = m.start()
-        if any(t[2] <= pos < t[3] for t in times):
-            continue
+        if used(m.start()): continue
         times.append(("", "", m.start(), m.end(), "allday"))
 
     return times
@@ -259,10 +263,11 @@ def is_deadline(text, date_start, date_end):
 
 
 def extract_events(text):
-    dates = parse_date(text)
-    times = parse_time(text)
-    location = parse_location(text)
-    title = parse_title(text)
+    normalized = normalize_text(text)
+    dates = parse_date(normalized)
+    times = parse_time(normalized)
+    location = parse_location(normalized)
+    title = parse_title(normalized)
     default_start = CONFIG["default_start_time"]
     default_end = CONFIG["default_end_time"]
 
