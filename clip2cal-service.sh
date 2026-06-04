@@ -43,10 +43,11 @@ edited_events = []
 
 for i, ev in enumerate(data['events'], 1):
     loc = ev.get('location', '')
+    desc = ev.get('description', '')[:200].replace(chr(10), ' ')
     if ev.get('all_day'):
-        default_text = f'イベント名: {ev[\"title\"]}\n日付: {ev[\"start_date\"]}\n終日: はい\n場所: {loc}'
+        default_text = f'イベント名: {ev[\"title\"]}\n日付: {ev[\"start_date\"]}\n終日: はい\n場所: {loc}\n詳細: {desc}'
     else:
-        default_text = f'イベント名: {ev[\"title\"]}\n開始: {ev[\"start_date\"]} {ev[\"start_time\"]}\n終了: {ev[\"end_date\"]} {ev[\"end_time\"]}\n場所: {loc}'
+        default_text = f'イベント名: {ev[\"title\"]}\n開始: {ev[\"start_date\"]} {ev[\"start_time\"]}\n終了: {ev[\"end_date\"]} {ev[\"end_time\"]}\n場所: {loc}\n詳細: {desc}'
 
     prompt_msg = f'予定 [{i}/{len(data[\"events\"])}] を確認・編集してください:'
 
@@ -75,6 +76,8 @@ for i, ev in enumerate(data['events'], 1):
 
     ev['title'] = fields.get('イベント名', ev['title'])
     ev['location'] = fields.get('場所', ev.get('location', ''))
+    if '詳細' in fields:
+        ev['description'] = fields['詳細']
 
     all_day_val = fields.get('終日', '')
     if all_day_val in ('はい', 'yes', 'Yes'):
@@ -162,7 +165,7 @@ for i, ev in enumerate(data['events']):
 
     title = ics_escape(ev['title'])
     location = ics_escape(ev.get('location', ''))
-    desc = ics_escape(ev.get('description', ''))
+    desc = ics_escape(ev.get('description', '')[:500])
 
     lines = [
         'BEGIN:VCALENDAR',

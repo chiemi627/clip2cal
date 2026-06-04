@@ -100,7 +100,7 @@ for i, ev in enumerate(data['events']):
 
     title = ics_escape(ev['title'])
     location = ics_escape(ev.get('location', ''))
-    desc = ics_escape(ev.get('description', ''))
+    desc = ics_escape(ev.get('description', '')[:500])
 
     lines = [
         'BEGIN:VCALENDAR',
