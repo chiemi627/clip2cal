@@ -67,6 +67,29 @@ if os.path.exists(config_path):
         tz = cfg.get('timezone', tz)
         calendar_app = cfg.get('calendar_app', '')
 
+def ics_escape(s):
+    return s.replace(chr(92), '\\\\').replace(',', '\\,').replace(';', '\\;').replace(chr(10), '\\n')
+
+def fold_line(line):
+    encoded = line.encode('utf-8')
+    if len(encoded) <= 75:
+        return line
+    parts = []
+    pos = 0
+    first = True
+    while pos < len(encoded):
+        limit = 75 if first else 74
+        end = pos + limit
+        if end >= len(encoded):
+            parts.append(encoded[pos:].decode('utf-8'))
+            break
+        while end > pos and (encoded[end] & 0xC0) == 0x80:
+            end -= 1
+        parts.append(encoded[pos:end].decode('utf-8'))
+        pos = end
+        first = False
+    return ('\r\n ').join(parts)
+
 data = json.load(sys.stdin)
 ics_dir = '$ICS_DIR'
 
@@ -75,31 +98,45 @@ for i, ev in enumerate(data['events']):
     ed = ev['end_date'].replace('-', '')
     uid = str(uuid.uuid4())
 
-    title = ev['title'].replace(',', '\\\\,').replace(';', '\\\\;')
-    location = ev.get('location', '').replace(',', '\\\\,').replace(';', '\\\\;')
-    description = ev.get('description', '').replace(',', '\\\\,').replace(';', '\\\\;').replace(chr(10), '\\\\n')
+    title = ics_escape(ev['title'])
+    location = ics_escape(ev.get('location', ''))
+    desc = ics_escape(ev.get('description', ''))
+
+    lines = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//clip2cal//EN',
+    ]
 
     if ev.get('all_day'):
         from datetime import datetime, timedelta
         next_day = datetime.strptime(ed, '%Y%m%d') + timedelta(days=1)
         ed_next = next_day.strftime('%Y%m%d')
-        dt_lines = f'DTSTART;VALUE=DATE:{sd}\nDTEND;VALUE=DATE:{ed_next}'
+        lines += [
+            'BEGIN:VEVENT',
+            f'UID:{uid}',
+            f'DTSTART;VALUE=DATE:{sd}',
+            f'DTEND;VALUE=DATE:{ed_next}',
+        ]
     else:
         st = ev['start_time'].replace(':', '')
         et = ev['end_time'].replace(':', '')
-        dt_lines = f'DTSTART;TZID={tz}:{sd}T{st}00\nDTEND;TZID={tz}:{ed}T{et}00'
+        lines += [
+            'BEGIN:VEVENT',
+            f'UID:{uid}',
+            f'DTSTART;TZID={tz}:{sd}T{st}00',
+            f'DTEND;TZID={tz}:{ed}T{et}00',
+        ]
 
-    ics = f'''BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//clip2cal//EN
-BEGIN:VEVENT
-UID:{uid}
-{dt_lines}
-SUMMARY:{title}
-LOCATION:{location}
-DESCRIPTION:{description}
-END:VEVENT
-END:VCALENDAR'''
+    lines += [
+        fold_line(f'SUMMARY:{title}'),
+        fold_line(f'LOCATION:{location}'),
+        fold_line(f'DESCRIPTION:{desc}'),
+        'END:VEVENT',
+        'END:VCALENDAR',
+    ]
+
+    ics = '\r\n'.join(lines) + '\r\n'
 
     path = os.path.join(ics_dir, f'event_{i}.ics')
     with open(path, 'w') as f:
@@ -109,7 +146,7 @@ END:VCALENDAR'''
         subprocess.run(['open', '-a', calendar_app, path])
     else:
         subprocess.run(['open', path])
-    print(f'  → カレンダーアプリでインポートダイアログを開きました: {ev[\"title\"]}')
+    print(f'  -> opened: {ev[\"title\"]}')
 "
 
 echo ""
