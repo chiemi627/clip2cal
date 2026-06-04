@@ -45,7 +45,7 @@ for i, ev in enumerate(data['events'], 1):
     loc = ev.get('location', '')
     desc = ev.get('description', '')[:200].replace(chr(10), ' ')
     if ev.get('all_day'):
-        default_text = f'イベント名: {ev[\"title\"]}\n日付: {ev[\"start_date\"]}\n終日: はい\n場所: {loc}\n詳細: {desc}'
+        default_text = f'イベント名: {ev[\"title\"]}\n開始: {ev[\"start_date\"]}\n終了: 終日\n場所: {loc}\n詳細: {desc}'
     else:
         default_text = f'イベント名: {ev[\"title\"]}\n開始: {ev[\"start_date\"]} {ev[\"start_time\"]}\n終了: {ev[\"end_date\"]} {ev[\"end_time\"]}\n場所: {loc}\n詳細: {desc}'
 
@@ -79,11 +79,12 @@ for i, ev in enumerate(data['events'], 1):
     if '詳細' in fields:
         ev['description'] = fields['詳細']
 
-    all_day_val = fields.get('終日', '')
-    if all_day_val in ('はい', 'yes', 'Yes'):
+    start = fields.get('開始', f'{ev[\"start_date\"]} {ev.get(\"start_time\", \"\")}')
+    end = fields.get('終了', f'{ev[\"end_date\"]} {ev.get(\"end_time\", \"\")}')
+
+    if end.strip() == '終日':
         ev['all_day'] = True
-        date_val = fields.get('日付', ev['start_date'])
-        dm = re.match(r'(\d{4}-\d{2}-\d{2})', date_val)
+        dm = re.match(r'(\d{4}-\d{2}-\d{2})', start)
         if dm:
             ev['start_date'] = dm.group(1)
             ev['end_date'] = dm.group(1)
@@ -91,10 +92,6 @@ for i, ev in enumerate(data['events'], 1):
         ev['end_time'] = ''
     else:
         ev['all_day'] = False
-        start = fields.get('開始', f'{ev[\"start_date\"]} {ev[\"start_time\"]}')
-        end = fields.get('終了', f'{ev[\"end_date\"]} {ev[\"end_time\"]}')
-
-        # 日時パース (YYYY-MM-DD HH:MM)
         sm = re.match(r'(\d{4}-\d{2}-\d{2})\s+(\d{1,2}:\d{2})', start)
         if sm:
             ev['start_date'] = sm.group(1)
